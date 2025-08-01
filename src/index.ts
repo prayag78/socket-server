@@ -1,6 +1,6 @@
-import express from "express";
+import express, { Request, Response } from "express";
 import http from "http";
-import { Server } from "socket.io";
+import { Server, Socket } from "socket.io";
 import cors from "cors";
 
 // Type definitions for socket events
@@ -113,7 +113,7 @@ const app = express();
 app.use(cors());
 
 // Health check endpoint
-app.get("/health", (req, res) => {
+app.get("/health", (req: Request, res: Response) => {
   res.json({
     status: "ok",
     timestamp: new Date().toISOString(),
@@ -122,7 +122,7 @@ app.get("/health", (req, res) => {
 });
 
 // Add a simple endpoint to check room status
-app.get("/api/rooms/:roomId", (req, res) => {
+app.get("/api/rooms/:roomId", (req: Request, res: Response) => {
   const { roomId } = req.params;
   const roomParticipants = activeRooms.get(roomId);
   const socketRoom = io.sockets.adapter.rooms.get(roomId);
@@ -161,7 +161,7 @@ const socketToRoom = new Map<string, string>();
 // Track cursor positions for each room
 const roomCursors = new Map<string, Map<string, any>>();
 
-io.on("connection", (socket) => {
+io.on("connection", (socket: Socket) => {
   console.log("User connected:", socket.id);
 
   // Handle room joining
