@@ -64,19 +64,19 @@ interface CursorVisibilityData {
 
 interface CallOfferData {
   roomId: string;
-  offer: RTCSessionDescriptionInit;
+  offer: any; // RTCSessionDescriptionInit
   fromUserId: string;
 }
 
 interface CallAnswerData {
   roomId: string;
-  answer: RTCSessionDescriptionInit;
+  answer: any; // RTCSessionDescriptionInit
   fromUserId: string;
 }
 
 interface IceCandidateData {
   roomId: string;
-  candidate: RTCIceCandidateInit;
+  candidate: any; // RTCIceCandidateInit
   fromUserId: string;
 }
 
