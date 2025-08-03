@@ -127,16 +127,20 @@ app.get("/api/rooms/:roomId", (req: Request, res: Response) => {
   const roomParticipants = activeRooms.get(roomId);
   const socketRoom = io.sockets.adapter.rooms.get(roomId);
 
+  const participantCount = roomParticipants
+    ? roomParticipants.size
+    : socketRoom
+    ? socketRoom.size
+    : 0;
+
   res.json({
     roomId,
     exists:
       (roomParticipants && roomParticipants.size > 0) ||
       (socketRoom && socketRoom.size > 0),
-    participantCount: roomParticipants
-      ? roomParticipants.size
-      : socketRoom
-      ? socketRoom.size
-      : 0,
+    participantCount,
+    isFull: participantCount >= 2,
+    maxParticipants: 2,
     activeRooms: Array.from(activeRooms.keys()),
     socketRooms: Array.from(io.sockets.adapter.rooms.keys()),
   });
@@ -190,9 +194,22 @@ io.on("connection", (socket: Socket) => {
       }
     }
 
-    // Join new room
+    // Join new room first
     socket.join(roomId);
     socketToRoom.set(socket.id, roomId);
+
+    // Check if room is full after joining (max 2 users)
+    const socketRoom = io.sockets.adapter.rooms.get(roomId);
+    const currentRoomSize = socketRoom ? socketRoom.size : 0;
+
+    if (currentRoomSize > 2) {
+      // Room is full, remove the user and emit error
+      socket.leave(roomId);
+      socketToRoom.delete(socket.id);
+      socket.emit("room-full", "Room is full");
+      console.log(`User ${userId} rejected from room ${roomId} - room is full`);
+      return;
+    }
 
     if (!activeRooms.has(roomId)) {
       activeRooms.set(roomId, new Set());
@@ -238,25 +255,19 @@ io.on("connection", (socket: Socket) => {
   });
 
   // Handle code execution
-  socket.on(
-    "run-code",
-    ({ roomId, output, language, input, code }: RunCodeData) => {
+  socket.on("run-code",({ roomId, output, language, input, code }: RunCodeData) => {
       socket.to(roomId).emit("code-run", { output, language, input, code });
     }
   );
 
   // Handle execution status
-  socket.on(
-    "execution-status",
-    ({ roomId, isRunning }: ExecutionStatusData) => {
+  socket.on("execution-status",({ roomId, isRunning }: ExecutionStatusData) => {
       socket.to(roomId).emit("execution-status", { isRunning });
     }
   );
 
   // Handle cursor position updates
-  socket.on(
-    "cursor-move",
-    ({ roomId, position, userId, userInfo }: CursorMoveData) => {
+  socket.on("cursor-move",({ roomId, position, userId, userInfo }: CursorMoveData) => {
       const roomCursorMap = roomCursors.get(roomId);
       if (roomCursorMap) {
         roomCursorMap.set(socket.id, {
@@ -278,9 +289,7 @@ io.on("connection", (socket: Socket) => {
   );
 
   // Handle cursor selection updates
-  socket.on(
-    "cursor-selection",
-    ({ roomId, selection, userId, userInfo }: CursorSelectionData) => {
+  socket.on("cursor-selection",({ roomId, selection, userId, userInfo }: CursorSelectionData) => {
       const roomCursorMap = roomCursors.get(roomId);
       if (roomCursorMap) {
         const currentCursor = roomCursorMap.get(socket.id);
@@ -301,9 +310,7 @@ io.on("connection", (socket: Socket) => {
   );
 
   // Handle cursor visibility (when user starts/stops typing)
-  socket.on(
-    "cursor-visibility",
-    ({ roomId, isVisible, userId, userInfo }: CursorVisibilityData) => {
+  socket.on("cursor-visibility",({ roomId, isVisible, userId, userInfo }: CursorVisibilityData) => {
       const roomCursorMap = roomCursors.get(roomId);
       if (roomCursorMap) {
         if (isVisible) {
@@ -343,9 +350,7 @@ io.on("connection", (socket: Socket) => {
       .emit("call-answer", { answer, fromUserId, fromSocketId: socket.id });
   });
 
-  socket.on(
-    "ice-candidate",
-    ({ roomId, candidate, fromUserId }: IceCandidateData) => {
+  socket.on("ice-candidate",({ roomId, candidate, fromUserId }: IceCandidateData) => {
       socket.to(roomId).emit("ice-candidate", {
         candidate,
         fromUserId,
@@ -380,9 +385,7 @@ io.on("connection", (socket: Socket) => {
     socket.to(roomId).emit("call-end", { fromUserId, fromSocketId: socket.id });
   });
 
-  socket.on(
-    "user-ready-for-call",
-    ({ roomId, fromUserId }: UserReadyForCallData) => {
+  socket.on("user-ready-for-call",({ roomId, fromUserId }: UserReadyForCallData) => {
       socket
         .to(roomId)
         .emit("user-ready-for-call", { fromUserId, fromSocketId: socket.id });
